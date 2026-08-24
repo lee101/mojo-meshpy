@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._lib import addr, f64, i64, lib
-from ._mesh import MeshInfoBase, boundary_faces, neighbor_table
+from ._mesh import MeshInfoBase, topology
 
 
 class MeshInfo(MeshInfoBase):
@@ -49,10 +49,9 @@ def build(mesh_info, options=None, verbose=False, attributes=False,
     result = np.empty((cap, 4), dtype=np.int64)
     work_points = np.empty((n + 4, 3), dtype=np.float64)
     work_tets = np.empty((cap, 4), dtype=np.int64)
-    live = np.empty(cap, dtype=np.int64)
     faces = np.empty((4 * cap, 3), dtype=np.int64)
     count = lib().mmp_delaunay3d(addr(points), n, addr(result), cap, addr(work_points),
-                                  addr(work_tets), addr(live), addr(faces))
+                                  addr(work_tets), addr(faces))
     if count == -2:
         raise RuntimeError("Mojo kernel rejected a null buffer address")
     if count < 0:
@@ -61,13 +60,12 @@ def build(mesh_info, options=None, verbose=False, attributes=False,
     out.set_points(points, mesh_info.point_markers)
     out.facets = list(mesh_info.facets)
     out.facet_markers = mesh_info.facet_markers.copy()
-    out.elements = result[:count].copy()
-    out.faces = boundary_faces(out.elements, 3) if count else np.empty((0, 3), dtype=np.int64)
+    out.elements = result[:count]
+    out.faces, out.neighbors = topology(out.elements)
     out.face_markers = np.zeros(len(out.faces), dtype=np.int64)
     if mesh_info.facets:
         expected = {tuple(sorted(face)) for face in mesh_info.facets}
         actual = {tuple(face) for face in out.faces}
         if actual != expected:
             raise NotImplementedError("facets must be the point set's convex hull")
-    out.neighbors = neighbor_table(out.elements)
     return out

@@ -55,12 +55,11 @@ PY
 
 `src/capi.mojo` uses incremental Bowyer-Watson insertion. Coordinates are
 copied into a row-major `float64` work array (`n x 2` or `n x 3`); simplices
-and scratch topology are NumPy-owned row-major `int64` arrays. The C ABI takes
+and cavity scratch space are NumPy-owned row-major `int64` arrays. The C ABI takes
 their addresses as `Int`, rejects null addresses before reconstructing typed
 Mojo pointers, and returns a simplex count. The Python layer validates shapes,
 finiteness, contiguity, and integer ranges, keeps every NumPy buffer alive for
-the duration of the call, and copies the completed result into the public mesh
-object.
+the duration of the call, and exposes a trimmed view of the completed result.
 
 Predicates use `float64`, so this is intended for non-degenerate point sets.
 The tests compare its simplices against Triangle with `quality_meshing=False`
@@ -74,15 +73,21 @@ upstream uses no-refinement modes.
 
 | kernel | Mojo (ms) | MeshPy (ms) | Mojo/MeshPy |
 |---|---:|---:|---:|
-| 2-D Delaunay, 200 points | 6.777 | 0.160 | 42.27x |
-| 3-D Delaunay, 60 points | 13.645 | 0.289 | 47.28x |
+| 2-D Delaunay, 200 points | 0.738 | 0.128 | 5.77x |
+| 3-D Delaunay, 60 points | 0.704 | 0.235 | 3.00x |
 
-This initial implementation is slower than MeshPy's mature C/C++ Triangle and
-TetGen kernels.  It is useful as a clear, standalone Mojo baseline with an
-explicit NumPy-buffer FFI boundary, rather than a performance replacement
-for those highly optimized kernels yet.
+Profiling showed that repeated Python `np.delete` calls in boundary and neighbor
+reconstruction dominated both workloads. Topology reconstruction now builds one
+contiguous face matrix, sorts it once, and groups adjacent equal faces. The
+native insertion kernel compacts dead simplices on every insertion so later
+predicates do not revisit them, and the result stays in its NumPy-owned FFI
+buffer without a final copy.
 
-The CPU copies input coordinates with four-lane Float64 SIMD and a scalar tail.
-The incremental cavity updates have loop-carried topology dependencies, so they
-remain serial.  No GPU path is included: the irregular predicate-driven work
-has low effective arithmetic intensity and cannot amortize device transfers.
+The CPU copies input coordinates with the target's native Float64 SIMD width and
+a scalar tail. The more arithmetic-heavy 3-D in-sphere scan evaluates active
+tetrahedra in SIMD batches, again with a scalar tail. Incremental cavity updates
+have loop-carried topology dependencies and small active frontiers, so thread
+launch and merge overhead outweigh useful parallel work; no threaded path was
+added. No GPU path is included: predicates gather irregular vertex data and
+perform less than roughly two floating-point operations per byte moved, so the
+work cannot justify device allocation and transfers.

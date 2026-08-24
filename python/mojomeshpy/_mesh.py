@@ -66,25 +66,55 @@ class MeshInfoBase:
         print(f"{len(self.points)} points, {len(self.elements)} elements")
 
 
+def _sorted_faces(elements: np.ndarray):
+    width = elements.shape[1]
+    if width == 3:
+        faces = np.empty((len(elements) * 3, 2), dtype=np.int64)
+        faces[0::3] = elements[:, (1, 2)]
+        faces[1::3] = elements[:, (0, 2)]
+        faces[2::3] = elements[:, (0, 1)]
+    else:
+        columns = np.asarray([
+            [column for column in range(width) if column != omit]
+            for omit in range(width)
+        ])
+        faces = elements[:, columns].reshape(-1, width - 1)
+    faces.sort(axis=1)
+    if width == 3:
+        base = int(faces.max()) + 1
+        order = np.argsort(faces[:, 0] * base + faces[:, 1])
+    else:
+        order = np.lexsort(tuple(faces[:, column] for column in range(width - 2, -1, -1)))
+    sorted_faces = faces[order]
+    same = np.all(sorted_faces[1:] == sorted_faces[:-1], axis=1)
+    internal = np.zeros(len(faces), dtype=bool)
+    internal[:-1] |= same
+    internal[1:] |= same
+    return sorted_faces[~internal], order, same
+
+
+def topology(elements: np.ndarray):
+    if not len(elements):
+        width = elements.shape[1]
+        return (np.empty((0, width - 1), dtype=np.int64),
+                np.empty((0, width), dtype=np.int64))
+    boundary, order, paired = _sorted_faces(elements)
+    width = elements.shape[1]
+    neighbors = np.full((len(elements), width), -1, dtype=np.int64)
+    left = order[:-1][paired]
+    right = order[1:][paired]
+    left_element, left_omit = np.divmod(left, width)
+    right_element, right_omit = np.divmod(right, width)
+    neighbors[left_element, left_omit] = right_element
+    neighbors[right_element, right_omit] = left_element
+    return boundary, neighbors
+
+
 def boundary_faces(elements: np.ndarray, vertices_per_face: int) -> np.ndarray:
-    counts: dict[tuple[int, ...], int] = {}
-    for element in elements:
-        for omit in range(len(element)):
-            face = tuple(sorted(np.delete(element, omit).tolist()))
-            counts[face] = counts.get(face, 0) + 1
-    return np.asarray([face for face, count in counts.items() if count == 1], dtype=np.int64).reshape(-1, vertices_per_face)
+    if not len(elements):
+        return np.empty((0, vertices_per_face), dtype=np.int64)
+    return _sorted_faces(elements)[0]
 
 
 def neighbor_table(elements: np.ndarray) -> np.ndarray:
-    result = np.full((len(elements), elements.shape[1]), -1, dtype=np.int64)
-    owner: dict[tuple[int, ...], tuple[int, int]] = {}
-    for i, element in enumerate(elements):
-        for omit in range(len(element)):
-            key = tuple(sorted(np.delete(element, omit).tolist()))
-            if key in owner:
-                j, other_omit = owner[key]
-                result[i, omit] = j
-                result[j, other_omit] = i
-            else:
-                owner[key] = (i, omit)
-    return result
+    return topology(elements)[1]

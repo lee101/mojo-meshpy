@@ -13,6 +13,17 @@ def simplex_set(elements):
     return {tuple(sorted(map(int, element))) for element in elements}
 
 
+def assert_neighbor_table(elements, neighbors):
+    width = elements.shape[1]
+    for element_index, row in enumerate(neighbors):
+        for omitted, neighbor in enumerate(row):
+            if neighbor < 0:
+                continue
+            face = set(np.delete(elements[element_index], omitted))
+            assert len(face.intersection(elements[neighbor])) == width - 1
+            assert element_index in neighbors[neighbor]
+
+
 def test_triangle_matches_meshpy_without_refinement():
     rng = np.random.default_rng(42)
     points = np.vstack(([[0, 0], [1, 0], [1, 1], [0, 1]], .15 + .7 * rng.random((80, 2))))
@@ -24,6 +35,7 @@ def test_triangle_matches_meshpy_without_refinement():
     assert simplex_set(ours.elements) == simplex_set(theirs.elements)
     assert {tuple(edge) for edge in ours.faces} == {tuple(sorted(edge)) for edge in facets}
     assert ours.neighbors.shape == ours.elements.shape
+    assert_neighbor_table(ours.elements, ours.neighbors)
 
 
 def test_tet_matches_meshpy_delaunay_mode():
@@ -36,6 +48,18 @@ def test_tet_matches_meshpy_delaunay_mode():
     theirs = upstream_tet.build(their_info, options=upstream_tet.Options("Q"))
     assert simplex_set(ours.elements) == simplex_set(theirs.elements)
     assert ours.neighbors.shape == ours.elements.shape
+    assert_neighbor_table(ours.elements, ours.neighbors)
+
+
+@pytest.mark.parametrize("module,dimension", [(triangle, 2), (tet, 3)])
+def test_contiguous_float64_points_stay_zero_copy(module, dimension):
+    points = np.eye(dimension + 1, dimension, dtype=np.float64)
+    info = module.MeshInfo()
+    info.set_points(points)
+    out = (triangle.build(info, quality_meshing=False)
+           if module is triangle else tet.build(info))
+    assert info.points is points
+    assert out.points is points
 
 
 def test_triangle_boundary_is_checked_not_ignored():
@@ -128,8 +152,8 @@ def test_unsupported_options_fail_instead_of_being_ignored():
 
 
 def test_ffi_rejects_null_addresses_before_pointer_reconstruction():
-    assert lib().mmp_delaunay2d(0, 3, 0, 4, 0, 0, 0, 0) == -2
-    assert lib().mmp_delaunay3d(0, 4, 0, 8, 0, 0, 0, 0) == -2
+    assert lib().mmp_delaunay2d(0, 3, 0, 4, 0, 0, 0) == -2
+    assert lib().mmp_delaunay3d(0, 4, 0, 8, 0, 0, 0) == -2
 
 
 @pytest.mark.parametrize("module, dimension", [(triangle, 2), (tet, 3)])

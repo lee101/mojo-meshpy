@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._lib import addr, f64, i64, lib
-from ._mesh import MeshInfoBase, boundary_faces, neighbor_table
+from ._mesh import MeshInfoBase, boundary_faces, topology
 
 
 class MeshInfo(MeshInfoBase):
@@ -59,10 +59,9 @@ def build(mesh_info, verbose=False, refinement_func=None, attributes=False,
     result = np.empty((cap, 3), dtype=np.int64)
     work_points = np.empty((n + 4, 2), dtype=np.float64)
     work_triangles = np.empty((cap, 3), dtype=np.int64)
-    live = np.empty(cap, dtype=np.int64)
     edges = np.empty((3 * cap, 2), dtype=np.int64)
     count = lib().mmp_delaunay2d(addr(points), n, addr(result), cap, addr(work_points),
-                                  addr(work_triangles), addr(live), addr(edges))
+                                  addr(work_triangles), addr(edges))
     if count == -2:
         raise RuntimeError("Mojo kernel rejected a null buffer address")
     if count < 0:
@@ -71,16 +70,17 @@ def build(mesh_info, verbose=False, refinement_func=None, attributes=False,
     out.set_points(points, mesh_info.point_markers)
     out.facets = list(mesh_info.facets)
     out.facet_markers = mesh_info.facet_markers.copy()
-    out.elements = result[:count].copy()
-    out.faces = boundary_faces(out.elements, 2) if count else np.empty((0, 2), dtype=np.int64)
+    out.elements = result[:count]
+    if generate_neighbor_lists:
+        out.faces, out.neighbors = topology(out.elements)
+    else:
+        out.faces = boundary_faces(out.elements, 2)
     out.face_markers = np.zeros(len(out.faces), dtype=np.int64)
     if mesh_info.facets:
         actual = {tuple(face) for face in out.faces}
         expected = {tuple(sorted(face)) for face in mesh_info.facets}
         if actual != expected:
             raise NotImplementedError("facets must be the point set's convex hull")
-    if generate_neighbor_lists:
-        out.neighbors = neighbor_table(out.elements)
     return out
 
 

@@ -42,9 +42,9 @@ def main():
     points3 = np.vstack(([[0., 0., 0.], [1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                           rng.dirichlet([1, 1, 1, 1], size=56)[:, 1:]))
     rows = [
-        ("2-D Delaunay, 200 points", elapsed(triangle_case(triangle, points2, [(0, 1), (1, 2), (2, 3), (3, 0)]), 5),
-         elapsed(triangle_case(upstream_triangle, points2, [(0, 1), (1, 2), (2, 3), (3, 0)]), 5)),
-        ("3-D Delaunay, 60 points", elapsed(tet_case(tet, points3), 3), elapsed(tet_case(upstream_tet, points3), 3)),
+        ("2-D Delaunay, 200 points", elapsed(triangle_case(triangle, points2, [(0, 1), (1, 2), (2, 3), (3, 0)]), 15),
+         elapsed(triangle_case(upstream_triangle, points2, [(0, 1), (1, 2), (2, 3), (3, 0)]), 15)),
+        ("3-D Delaunay, 60 points", elapsed(tet_case(tet, points3), 15), elapsed(tet_case(upstream_tet, points3), 15)),
     ]
     print(f"Machine: {platform.platform()} | Python {platform.python_version()}")
     print("| kernel | Mojo (ms) | MeshPy (ms) | Mojo/MeshPy |")

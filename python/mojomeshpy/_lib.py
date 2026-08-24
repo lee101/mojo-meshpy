@@ -36,9 +36,9 @@ def lib() -> ctypes.CDLL:
     global _handle
     if _handle is None:
         _handle = ctypes.CDLL(str(build()))
-        _handle.mmp_delaunay2d.argtypes = [I] * 8
+        _handle.mmp_delaunay2d.argtypes = [I] * 7
         _handle.mmp_delaunay2d.restype = I
-        _handle.mmp_delaunay3d.argtypes = [I] * 8
+        _handle.mmp_delaunay3d.argtypes = [I] * 7
         _handle.mmp_delaunay3d.restype = I
     return _handle
 
