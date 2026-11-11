@@ -60,7 +60,7 @@ def mmp_delaunay2d(
     var point_values = n * 2
     var offset = 0
     while offset + W <= point_values:
-        p.store(offset, points.load[width=W](offset))
+        p.store(offset, points.unsafe_load[width=W](offset))
         offset += W
     while offset < point_values:
         p[offset] = points[offset]
@@ -289,7 +289,7 @@ def mmp_delaunay3d(
     var point_values = n * 3
     var offset = 0
     while offset + W <= point_values:
-        p.store(offset, points.load[width=W](offset))
+        p.store(offset, points.unsafe_load[width=W](offset))
         offset += W
     while offset < point_values:
         p[offset] = points[offset]
